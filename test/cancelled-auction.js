@@ -4,6 +4,7 @@ let catchRevert = require("./exceptions.js").catchRevert;
 contract('Cancelled Auction', async (accounts) => {
     it("should refund bids and fees", async () => {
         const instance = await Auction.deployed();
+        await instance.initiate({ value: await instance.auctionFee(), from: accounts[0] });
         const beforeBid = web3.fromWei(web3.eth.getBalance(accounts[1]));
         const bidReceipt = await instance.placeBid({ value: web3.toWei(1, "ether"), from: accounts[1] });
         const bidTxt = await web3.eth.getTransaction(bidReceipt.tx);
@@ -17,12 +18,7 @@ contract('Cancelled Auction', async (accounts) => {
         const totalWithFees = afterRefund.add(refundCost).add(bidCost);
 
         assert.equal(beforeBid.valueOf(), totalWithFees.valueOf());
-        assert.equal(feesAfterRefund.valueOf(), 0);
-    });
-
-    it("should revert bids", async () => {
-        const instance = await Auction.deployed();
-        await catchRevert(instance.placeBid({ value: await instance.biddingFee(), from: accounts[1] }));
+        assert.equal(feesAfterRefund.valueOf(), await instance.auctionFee());
     });
 
     it("should revert bids", async () => {

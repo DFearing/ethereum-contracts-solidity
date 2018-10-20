@@ -2,6 +2,17 @@ let Auction = artifacts.require("auction");
 let catchRevert = require("./exceptions.js").catchRevert;
 
 contract('Happy Path', async (accounts) => {
+    it("should require a fee greater than the auction fee", async () => {
+        const instance = await Auction.deployed();
+        await catchRevert(instance.initiate({ value: await instance.auctionFee() - 1, from: accounts[0] }));
+    });
+
+    it("should initiate", async () => {
+        const instance = await Auction.deployed();
+        await instance.initiate({ value: await instance.auctionFee(), from: accounts[0] });
+        assert.equal((await instance.totalFees()).toNumber(), (await instance.auctionFee()).toNumber());
+    });
+
     it("should require a bid greater than the bidding fee", async () => {
         const instance = await Auction.deployed();
         await catchRevert(instance.placeBid({ value: await instance.biddingFee(), from: accounts[1] }));
@@ -10,21 +21,15 @@ contract('Happy Path', async (accounts) => {
     it("should accept bids", async () => {
         const instance = await Auction.deployed();
         await instance.placeBid({ value: web3.toWei(1, "ether"), from: accounts[1] });
-        assert.equal((await instance.totalFees()).valueOf(), await instance.biddingFee());
+        assert.equal((await instance.totalFees()).toNumber(), (await instance.biddingFee()).toNumber() + (await instance.auctionFee()).toNumber());
         await instance.placeBid({ value: web3.toWei(2, "ether"), from: accounts[9] });
-        assert.equal((await instance.totalFees()).valueOf(), await instance.biddingFee() * 2);
+        assert.equal((await instance.totalFees()).valueOf(), (await instance.biddingFee()).toNumber() * 2 + (await instance.auctionFee()).toNumber());
     });
 
     it("should reject additional bids", async () => {
         const instance = await Auction.deployed();
         await catchRevert(instance.placeBid({ value: web3.toWei(1, "ether"), from: accounts[1] }));
     });
-
-    // it("should transition state", async () => {
-    //     const instance = await Auction.deployed();
-    //     await instance.transitionToState(2, { from: accounts[0] });
-    //     await instance.calculateWinningBid({ from: accounts[0] });
-    // });
 
     it("should refund losing bids minus fees", async () => {
         const instance = await Auction.deployed();
@@ -35,7 +40,7 @@ contract('Happy Path', async (accounts) => {
         const bidCost = web3.fromWei(bidTxt.gasPrice.mul(bidReceipt.receipt.gasUsed));
         const biddingFee = await instance.biddingFee();
 
-        await instance.transitionToState(2, { from: accounts[0] });
+        await instance.transitionToState(3, { from: accounts[0] });
         await instance.calculateWinningBid({ from: accounts[0] });
 
         const feesBeforeRefund = await instance.totalFees();
