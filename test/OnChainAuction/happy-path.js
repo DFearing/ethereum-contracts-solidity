@@ -1,5 +1,5 @@
-let Auction = artifacts.require("auction");
-let catchRevert = require("./exceptions.js").catchRevert;
+let Auction = artifacts.require("OnChainAuction");
+let catchRevert = require("../exceptions.js").catchRevert;
 
 contract('Happy Path', async (accounts) => {
     it("should require a fee greater than the auction fee", async () => {
@@ -33,11 +33,11 @@ contract('Happy Path', async (accounts) => {
 
     it("should refund losing bids minus fees", async () => {
         const instance = await Auction.deployed();
-        const beforeBid = web3.fromWei(web3.eth.getBalance(accounts[2]));
+        const beforeBid = web3.eth.getBalance(accounts[2]);
        
         const bidReceipt = await instance.placeBid({ value: web3.toWei(1, "ether"), from: accounts[2] });
         const bidTxt = await web3.eth.getTransaction(bidReceipt.tx);
-        const bidCost = web3.fromWei(bidTxt.gasPrice.mul(bidReceipt.receipt.gasUsed));
+        const bidCost = bidTxt.gasPrice.mul(bidReceipt.receipt.gasUsed);
         const biddingFee = await instance.biddingFee();
 
         await instance.transitionToState(3, { from: accounts[0] });
@@ -47,9 +47,9 @@ contract('Happy Path', async (accounts) => {
         const refundReceipt = await instance.refundLosingBid({ from: accounts[2] });
         const feesAfterRefund = await instance.totalFees();
         const refundTx = await web3.eth.getTransaction(refundReceipt.tx);
-        const refundCost = web3.fromWei(refundTx.gasPrice.mul(refundReceipt.receipt.gasUsed));
-        const afterRefund = web3.fromWei(web3.eth.getBalance(accounts[2]));
-        const afterRefundWithFees = afterRefund.add(refundCost).add(bidCost).add(web3.fromWei(biddingFee));
+        const refundCost = refundTx.gasPrice.mul(refundReceipt.receipt.gasUsed);
+        const afterRefund = web3.eth.getBalance(accounts[2]);
+        const afterRefundWithFees = afterRefund.add(refundCost).add(bidCost).add(biddingFee);
     
         assert.equal(beforeBid.valueOf(), afterRefundWithFees.valueOf());
         assert.equal(feesBeforeRefund.valueOf(), feesAfterRefund.valueOf());
@@ -57,13 +57,13 @@ contract('Happy Path', async (accounts) => {
 
     it("should not refund twice", async () => {
         const instance = await Auction.deployed();
-        const beforeRefund = web3.fromWei(web3.eth.getBalance(accounts[2]));
+        const beforeRefund = web3.eth.getBalance(accounts[2]);
         const feesBeforeRefund = await instance.totalFees();
         const refundReceipt = await instance.refundLosingBid({ from: accounts[2] });
         const feesAfterRefund = await instance.totalFees();
         const refundTx = await web3.eth.getTransaction(refundReceipt.tx);
-        const refundCost = web3.fromWei(refundTx.gasPrice.mul(refundReceipt.receipt.gasUsed));
-        const afterRefund = web3.fromWei(web3.eth.getBalance(accounts[2]));
+        const refundCost = refundTx.gasPrice.mul(refundReceipt.receipt.gasUsed);
+        const afterRefund = web3.eth.getBalance(accounts[2]);
         const afterRefundWithFees = afterRefund.add(refundCost);
 
         assert.equal(beforeRefund.valueOf(), afterRefundWithFees.valueOf());
@@ -77,33 +77,31 @@ contract('Happy Path', async (accounts) => {
 
     it("should withdraw payout", async () => {
         const instance = await Auction.deployed();
-        const beforePayout = web3.fromWei(web3.eth.getBalance(accounts[0]));
+        const beforePayout = web3.eth.getBalance(accounts[0]);
 
         const payoutReceipt = await instance.collectPayout({ from: accounts[0] });
         const payoutTx = await web3.eth.getTransaction(payoutReceipt.tx);
 
-        const payoutCost = web3.fromWei(payoutTx.gasPrice.mul(payoutReceipt.receipt.gasUsed));
-        const afterPayout = web3.fromWei(web3.eth.getBalance(accounts[0]));
+        const payoutCost = payoutTx.gasPrice.mul(payoutReceipt.receipt.gasUsed);
+        const afterPayout = web3.eth.getBalance(accounts[0]);
         const afterPayoutWithFees = afterPayout.add(payoutCost);
 
-        const biddingFee = web3.fromWei(await instance.biddingFee());
+        const payout = web3.toWei(2, "ether") - (await instance.biddingFee()).toNumber();
 
-        assert.equal(afterPayoutWithFees.valueOf(), beforePayout.toNumber() + 2 - biddingFee);
+        assert.equal(afterPayoutWithFees.toNumber(), payout + beforePayout.toNumber());
     });
 
     it("should not withdraw additional payout", async () => {
         const instance = await Auction.deployed();
-        const beforePayout = web3.fromWei(web3.eth.getBalance(accounts[0]));
+        const beforePayout = web3.eth.getBalance(accounts[0]);
 
         const payoutReceipt = await instance.collectPayout({ from: accounts[0] });
         const payoutTx = await web3.eth.getTransaction(payoutReceipt.tx);
 
-        const payoutCost = web3.fromWei(payoutTx.gasPrice.mul(payoutReceipt.receipt.gasUsed));
-        const afterPayout = web3.fromWei(web3.eth.getBalance(accounts[0]));
+        const payoutCost = payoutTx.gasPrice.mul(payoutReceipt.receipt.gasUsed);
+        const afterPayout = web3.eth.getBalance(accounts[0]);
         const afterPayoutWithFees = afterPayout.add(payoutCost);
 
-        const biddingFee = web3.fromWei(await instance.biddingFee());
-
-        assert.equal(afterPayoutWithFees.valueOf(), beforePayout.toNumber());
+        assert.equal(afterPayoutWithFees.toNumber(), beforePayout.toNumber());
     });
 });

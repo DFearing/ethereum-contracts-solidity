@@ -2,11 +2,20 @@ pragma solidity ^0.4.23;
 
 import "./SafeMath.sol";
 
-contract Auction {
-
+/**
+ * @title BlindOnChainAuction
+ * @author Dan Fearing
+ * @dev A blind auction system with bids committed to the chain via another contract, but not linked until the reveal state.
+ */
+contract BlindOnChainAuction {
     using SafeMath for uint256;
 
     enum State { Uninitialized, Cancelled, Bidding, Revealing, Paying, Collecting }
+
+    struct Bid {
+        uint amount;
+        address account;
+    }
 
     address custodian;
     address seller;
@@ -18,19 +27,13 @@ contract Auction {
     uint public startDate;
     uint public revealDate;
     uint public paymentDue;
-    uint orphanedPayoutWindow;
 
     Bid winningBid;
+    uint orphanedPayoutWindow;
     uint payout;
-    uint32 totalBids;
 
     mapping(address => uint256) usersBids;
     Bid[] bids;
-
-    struct Bid {
-        uint amount;
-        address account;
-    }
 
     constructor(address _custodian, address _seller, uint _biddingFee, uint _auctionFee, uint32 _auctionLengthInDays, uint _paymentWindowInDays, uint _orphanedPayoutWindowInWeeks) public {
         state = State.Uninitialized;
@@ -96,7 +99,6 @@ contract Auction {
         usersBids[msg.sender] = bidAmount;
         bids.push(Bid(bidAmount, msg.sender));
         totalFees = totalFees.add(biddingFee);
-        totalBids++;
     }
 
     function _transitionIfRequired() internal {
