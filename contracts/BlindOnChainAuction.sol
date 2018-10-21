@@ -14,7 +14,8 @@ contract BlindOnChainAuction {
 
     struct Bid {
         uint amount;
-        address account;
+        address user;
+        address escrow;
     }
 
     address custodian;
@@ -35,8 +36,8 @@ contract BlindOnChainAuction {
     mapping(address => uint256) usersBids;
     Bid[] public bids;
 
-    event BidRevealed(address _from, uint _amount);
-    event WinnerRevealed(address _from, uint _amount);
+    event BidRevealed(address bidder, address escrow, uint amount);
+    event WinnerRevealed(address winner, address escrow, uint amount);
 
     constructor(address _custodian, address _seller, uint _biddingFee, uint _auctionFee, uint8 _auctionLengthInDays, uint8 _paymentWindowInDays, uint8 _orphanedPayoutWindowInWeeks) public {
         state = State.Uninitialized;
@@ -80,12 +81,13 @@ contract BlindOnChainAuction {
         state = _state;
     }
 
-    function revealBid(uint amount) external payable {
+    function recordBid(uint _amount, address _bidder, address _escrow) external payable {
+        require(msg.sender == custodian || tx.origin == custodian, "Only the Custodian can call this method.");
         require(state == State.Revealing, "This method can only be called during the Revealing state.");
 
-        usersBids[msg.sender] = amount;
-        bids.push(Bid(amount, msg.sender));
-        emit BidRevealed(msg.sender, amount);
+        usersBids[_bidder] = _amount;
+        bids.push(Bid(_amount, _bidder, _escrow));
+        emit BidRevealed(_bidder, _escrow, _amount);
     }
 
     function calculateWinningBid() external {
@@ -103,7 +105,7 @@ contract BlindOnChainAuction {
         winningBid = topBid;
         payout = winningBid.amount;
         state = State.Collecting;
-        emit WinnerRevealed(winningBid.account, winningBid.amount);
+        emit WinnerRevealed(winningBid.user, winningBid.escrow, winningBid.amount);
     }
 
     function acceptWinningBid() external payable {

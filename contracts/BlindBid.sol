@@ -38,7 +38,7 @@ contract BlindBid {
         bid = msg.value;
     }
 
-    function revealBid(address _auction) external {
+    function revealBidToAuction(address _auction) external {
         require(msg.sender == custodian, "Only the Custodian can perform this action.");
         require(state == State.Bidding, "Fees cannot be collected in this state.");
 
@@ -47,7 +47,7 @@ contract BlindBid {
         fees = auction.biddingFee();
         bid = bid - fees;
 
-        auction.revealBid(bid);
+        auction.recordBid(bid, owner, address(this));
     }
 
     function transferWinningBid() external {
