@@ -8,9 +8,9 @@ import "./SafeMath.sol";
  * @dev A simple auction system with bids committed to the chain. DO NOT USE! Bids are not blind and therefore anyone can easily outbid you at the last second.
  */
 contract OnChainAuction {
-    using SafeMath for uint256;
+    using SafeMath for uint;
 
-    enum State { Uninitialized, Cancelled, Bidding, Revealing, Paying, Collecting }
+    enum State { Uninitialized, Cancelled, Bidding, Revealing, Collecting }
 
     struct Bid {
         uint amount;
@@ -22,7 +22,7 @@ contract OnChainAuction {
 
     uint public auctionFee;
     uint public biddingFee;
-    uint256 public totalFees;
+    uint public totalFees;
     State public state;
     uint public startDate;
     uint public revealDate;
@@ -32,10 +32,10 @@ contract OnChainAuction {
     uint orphanedPayoutWindow;
     uint payout;
 
-    mapping(address => uint256) usersBids;
+    mapping(address => uint) usersBids;
     Bid[] bids;
 
-    constructor(address _custodian, address _seller, uint _biddingFee, uint _auctionFee, uint32 _auctionLengthInDays, uint _paymentWindowInDays, uint _orphanedPayoutWindowInWeeks) public {
+    constructor(address _custodian, address _seller, uint _biddingFee, uint _auctionFee, uint8 _auctionLengthInDays, uint8 _paymentWindowInDays, uint8 _orphanedPayoutWindowInWeeks) public {
         state = State.Uninitialized;
         custodian = _custodian;
         seller = _seller;
@@ -76,7 +76,7 @@ contract OnChainAuction {
     }
 
     function refundLosingBid() external {
-        require(state == State.Paying || state == State.Collecting, "Can't refund a losing bid in this state.");
+        require(state == State.Collecting, "Can't refund a losing bid in this state.");
         require(msg.sender != winningBid.account, "Only losing usersBids can be refunded.");
 
         uint amount = usersBids[msg.sender];
@@ -115,18 +115,6 @@ contract OnChainAuction {
         state = _state;
     }
 
-    function transitionState() external {
-        require(msg.sender == custodian, "Only the Custodian can call this method.");
-
-        if (state == State.Bidding) {
-            state = State.Revealing;
-        } else if (state == State.Revealing) {
-            state = State.Paying;
-        } else if (state == State.Paying) {
-            state = State.Collecting;
-        }
-    }
-
     function calculateWinningBid() external {
         require(msg.sender == custodian, "Only the Custodian can call this method.");
         require(state == State.Revealing, "Winning bidder cannot be calculated in this state.");
@@ -141,8 +129,6 @@ contract OnChainAuction {
 
         winningBid = topBid;
         payout = winningBid.amount;
-
-        // Skip paying state in this contract
         state = State.Collecting;
     }
 
@@ -175,12 +161,7 @@ contract OnChainAuction {
         require(state == State.Collecting, "Orphaned fees cannot be collected in this state.");
 
         if (now > orphanedPayoutWindow) {
-            uint amount = payout;
-            payout = 0;
-
-            if (amount > 0) {
-                msg.sender.transfer(amount);
-            }
+            msg.sender.transfer(address(this).balance);
         }
     }
 }

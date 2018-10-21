@@ -8,9 +8,9 @@ import "./SafeMath.sol";
  * @dev A blind auction system with bids committed to the chain via another contract, but not linked until the reveal state.
  */
 contract BlindOnChainAuction {
-    using SafeMath for uint256;
+    using SafeMath for uint;
 
-    enum State { Uninitialized, Cancelled, Bidding, Revealing, Paying, Collecting }
+    enum State { Uninitialized, Cancelled, Bidding, Revealing, Collecting }
 
     struct Bid {
         uint amount;
@@ -22,7 +22,7 @@ contract BlindOnChainAuction {
 
     uint public auctionFee;
     uint public biddingFee;
-    uint256 public totalFees;
+    uint public totalFees;
     State public state;
     uint public startDate;
     uint public revealDate;
@@ -33,9 +33,9 @@ contract BlindOnChainAuction {
     uint payout;
 
     mapping(address => uint256) usersBids;
-    Bid[] bids;
+    Bid[] public bids;
 
-    constructor(address _custodian, address _seller, uint _biddingFee, uint _auctionFee, uint32 _auctionLengthInDays, uint _paymentWindowInDays, uint _orphanedPayoutWindowInWeeks) public {
+    constructor(address _custodian, address _seller, uint _biddingFee, uint _auctionFee, uint8 _auctionLengthInDays, uint8 _paymentWindowInDays, uint8 _orphanedPayoutWindowInWeeks) public {
         state = State.Uninitialized;
         custodian = _custodian;
         seller = _seller;
@@ -63,44 +63,6 @@ contract BlindOnChainAuction {
         state = State.Cancelled;
     }
 
-    function getRefundFromCancelledAuction() external {
-        require(state == State.Cancelled, "This method can only be called if the auction has been cancelled.");
-
-        uint amount = usersBids[msg.sender];
-        usersBids[msg.sender] = 0;
-
-        if (amount > 0) {
-            totalFees = totalFees.sub(biddingFee);
-            msg.sender.transfer(amount + biddingFee);
-        }
-    }
-
-    function refundLosingBid() external {
-        require(state == State.Paying || state == State.Collecting, "Can't refund a losing bid in this state.");
-        require(msg.sender != winningBid.account, "Only losing usersBids can be refunded.");
-
-        uint amount = usersBids[msg.sender];
-        usersBids[msg.sender] = 0;
-
-        if (amount > 0) {
-            msg.sender.transfer(amount);
-        }
-    }
-
-    function placeBid() external payable {
-        _transitionIfRequired();
-
-        require(state == State.Bidding, "This method can only be called during the Bidding state.");
-        require(msg.value > biddingFee, "This bid is less than the bidding fee.");
-        require(usersBids[msg.sender] == 0, "You can only bid once.");
-
-        uint bidAmount = msg.value - biddingFee;
-
-        usersBids[msg.sender] = bidAmount;
-        bids.push(Bid(bidAmount, msg.sender));
-        totalFees = totalFees.add(biddingFee);
-    }
-
     function _transitionIfRequired() internal {
         if (state == State.Bidding) {
             if (now > revealDate) {
@@ -115,16 +77,11 @@ contract BlindOnChainAuction {
         state = _state;
     }
 
-    function transitionState() external {
-        require(msg.sender == custodian, "Only the Custodian can call this method.");
+    function unblindBid(uint amount) external payable {
+        //require(state == State.Revealing, "This method can only be called during the Revealing state.");
 
-        if (state == State.Bidding) {
-            state = State.Revealing;
-        } else if (state == State.Revealing) {
-            state = State.Paying;
-        } else if (state == State.Paying) {
-            state = State.Collecting;
-        }
+        usersBids[msg.sender] = amount;
+        bids.push(Bid(amount, msg.sender));
     }
 
     function calculateWinningBid() external {
@@ -175,11 +132,8 @@ contract BlindOnChainAuction {
         require(state == State.Collecting, "Orphaned fees cannot be collected in this state.");
 
         if (now > orphanedPayoutWindow) {
-            uint amount = payout;
-            payout = 0;
-
-            if (amount > 0) {
-                msg.sender.transfer(amount);
+            if (address(this).balance > 0) {
+                msg.sender.transfer(address(this).balance);
             }
         }
     }
