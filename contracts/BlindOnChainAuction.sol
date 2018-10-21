@@ -35,6 +35,9 @@ contract BlindOnChainAuction {
     mapping(address => uint256) usersBids;
     Bid[] public bids;
 
+    event BidRevealed(address _from, uint _amount);
+    event WinnerRevealed(address _from, uint _amount);
+
     constructor(address _custodian, address _seller, uint _biddingFee, uint _auctionFee, uint8 _auctionLengthInDays, uint8 _paymentWindowInDays, uint8 _orphanedPayoutWindowInWeeks) public {
         state = State.Uninitialized;
         custodian = _custodian;
@@ -77,11 +80,12 @@ contract BlindOnChainAuction {
         state = _state;
     }
 
-    function unblindBid(uint amount) external payable {
-        //require(state == State.Revealing, "This method can only be called during the Revealing state.");
+    function revealBid(uint amount) external payable {
+        require(state == State.Revealing, "This method can only be called during the Revealing state.");
 
         usersBids[msg.sender] = amount;
         bids.push(Bid(amount, msg.sender));
+        emit BidRevealed(msg.sender, amount);
     }
 
     function calculateWinningBid() external {
@@ -98,9 +102,12 @@ contract BlindOnChainAuction {
 
         winningBid = topBid;
         payout = winningBid.amount;
-
-        // Skip paying state in this contract
         state = State.Collecting;
+        emit WinnerRevealed(winningBid.account, winningBid.amount);
+    }
+
+    function acceptWinningBid() external payable {
+        payout = msg.value;
     }
 
     function collectPayout() external {

@@ -21,9 +21,9 @@ contract BlindBid {
     uint public bid;
     State public state;
 
-    constructor(address _custodian, uint8 _orphanedFundsWindowInWeeks) public {
+    constructor(address _custodian, address _owner, uint8 _orphanedFundsWindowInWeeks) public {
         custodian = _custodian;
-        owner = msg.sender;
+        owner = _owner;
         state = State.Bidding;
         orphanedFundsWindow = _orphanedFundsWindowInWeeks * 1 weeks;
     }
@@ -38,8 +38,8 @@ contract BlindBid {
         bid = msg.value;
     }
 
-    function unblindBid(address _auction) external {
-        require(msg.sender == owner, "Only the Custodian can perform this action.");
+    function revealBid(address _auction) external {
+        require(msg.sender == custodian, "Only the Custodian can perform this action.");
         require(state == State.Bidding, "Fees cannot be collected in this state.");
 
         state = State.Revealing;
@@ -47,18 +47,19 @@ contract BlindBid {
         fees = auction.biddingFee();
         bid = bid - fees;
 
-        auction.unblindBid(bid);
+        auction.revealBid(bid);
     }
 
     function transferWinningBid() external {
-        require(msg.sender == owner, "Only the Owner can perform this action.");
-        require(state == State.Revealing, "Fees cannot be collected in this state.");
+        require(msg.sender == owner || msg.sender == custodian, "Only the Owner/Custodian can perform this action.");
+        require(state == State.Revealing, "Can't transfer winning bid in this state.");
 
         state = State.Paying;
+        uint amount = bid;
 
-        if (bid > 0) {
+        if (amount > 0) {
             bid = 0;
-            address(auction).transfer(bid);
+            auction.acceptWinningBid.value(amount)();
         }
     }
 
@@ -66,9 +67,11 @@ contract BlindBid {
         require(msg.sender == custodian, "Only the Custodian can call this method.");
         require(state == State.Paying, "Fees cannot be collected in this state.");
 
-        if (fees > 0) {
+        uint amount = fees;
+
+        if (amount > 0) {
             fees = 0;
-            msg.sender.transfer(fees);
+            msg.sender.transfer(amount);
         }
     }
 
